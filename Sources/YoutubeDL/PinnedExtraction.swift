@@ -20,21 +20,11 @@ public extension YoutubeDL {
         // 1. CPython
         // ---------------------------------------------------------
 
-        stage("PINNED 1 - before Py_IsInitialized")
+     stage("PINNED 1 - before PythonSupport.initialize")
 
-        let initialized = Py_IsInitialized()
+PythonSupport.initialize()
 
-        stage("PINNED 2 - Py_IsInitialized = \(initialized)")
-
-        if initialized == 0 {
-
-            stage("PINNED 3 - before PythonSupport.initialize")
-
-            PythonSupport.initialize()
-
-            stage("PINNED 4 - PythonSupport.initialize OK")
-        }
-
+stage("PINNED 2 - PythonSupport.initialize OK")
 
         // ---------------------------------------------------------
         // 2. yt-dlp files
