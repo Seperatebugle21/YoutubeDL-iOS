@@ -48,13 +48,12 @@ stage("PINNED 2 - PythonSupport.initialize OK")
         // 3. Python sys
         // ---------------------------------------------------------
 
-        stage("PINNED 7 - before import sys")
+    stage("PINNED 7 - before Python.import sys")
 
-        let sys =
-            try Python.attemptImport("sys")
+let sys =
+    Python.import("sys")
 
-        stage("PINNED 8 - import sys OK")
-
+stage("PINNED 8 - Python.import sys OK")
 
         // ---------------------------------------------------------
         // 4. sys.path
