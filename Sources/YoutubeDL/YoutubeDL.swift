@@ -267,29 +267,56 @@ open class YoutubeDL: NSObject {
         _ = postDownloadTask
     }
     
-    func loadPythonModule(downloadPythonModule: Bool = true) async throws -> PythonObject {
-        if Py_IsInitialized() == 0 {
-            PythonSupport.initialize()
+    func loadPythonModule(
+    downloadPythonModule: Bool = true
+) async throws -> PythonObject {
+
+    PythonSupport.initialize()
+
+    if !FileManager.default.fileExists(
+        atPath: Self.pythonModuleURL.path
+    ) {
+        guard downloadPythonModule else {
+            throw YoutubeDLError.noPythonModule
         }
-        
-        if !FileManager.default.fileExists(atPath: Self.pythonModuleURL.path) {
-            guard downloadPythonModule else {
-                throw YoutubeDLError.noPythonModule
-            }
-            try await Self.downloadPythonModule()
-        }
-        
-        let sys = try Python.attemptImport("sys")
-        if !(Array(sys.path) ?? []).contains(Self.pythonModuleURL.path) {
-            injectFakePopen(handler: popenHandler)
-            
-            sys.path.insert(1, Self.pythonModuleURL.path)
-        }
-        
-        let pythonModule = try Python.attemptImport("yt_dlp")
-        version = String(pythonModule.version.__version__)
-        return pythonModule
+
+        try await Self.downloadPythonModule()
     }
+
+    let sys =
+        try Python.attemptImport(
+            "sys"
+        )
+
+    if !(Array(sys.path) ?? [])
+        .contains(
+            Self.pythonModuleURL.path
+        ) {
+
+        injectFakePopen(
+            handler: popenHandler
+        )
+
+        sys.path.insert(
+            1,
+            Self.pythonModuleURL.path
+        )
+    }
+
+    let pythonModule =
+        try Python.attemptImport(
+            "yt_dlp"
+        )
+
+    version =
+        String(
+            pythonModule
+                .version
+                .__version__
+        )
+
+    return pythonModule
+}
     
     func injectFakePopen(handler: PythonFunction) {
         runSimpleString("""
