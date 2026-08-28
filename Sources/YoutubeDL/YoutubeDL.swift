@@ -267,26 +267,38 @@ open class YoutubeDL: NSObject {
         _ = postDownloadTask
     }
     
+
     func loadPythonModule(
     downloadPythonModule: Bool = true
 ) async throws -> PythonObject {
 
-    PythonSupport.initialize()
+    if Py_IsInitialized() == 0 {
+
+        PythonSupport.initialize()
+    }
+
 
     if !FileManager.default.fileExists(
-        atPath: Self.pythonModuleURL.path
+        atPath:
+            Self.pythonModuleURL.path
     ) {
+
         guard downloadPythonModule else {
+
             throw YoutubeDLError.noPythonModule
         }
 
-        try await Self.downloadPythonModule()
+
+        try await
+            Self.downloadPythonModule()
     }
+
 
     let sys =
         try Python.attemptImport(
             "sys"
         )
+
 
     if !(Array(sys.path) ?? [])
         .contains(
@@ -294,8 +306,10 @@ open class YoutubeDL: NSObject {
         ) {
 
         injectFakePopen(
-            handler: popenHandler
+            handler:
+                popenHandler
         )
+
 
         sys.path.insert(
             1,
@@ -303,10 +317,12 @@ open class YoutubeDL: NSObject {
         )
     }
 
+
     let pythonModule =
         try Python.attemptImport(
             "yt_dlp"
         )
+
 
     version =
         String(
@@ -314,6 +330,7 @@ open class YoutubeDL: NSObject {
                 .version
                 .__version__
         )
+
 
     return pythonModule
 }
