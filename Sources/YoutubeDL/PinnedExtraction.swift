@@ -1,8 +1,6 @@
 import Foundation
 import PythonKit
 import PythonSupport
-import LinkPython
-
 
 public extension YoutubeDL {
 
@@ -15,242 +13,70 @@ public extension YoutubeDL {
                 text,
                 forKey: "ytdlpLastStage"
             )
+
             UserDefaults.standard.synchronize()
         }
 
-        // ---------------------------------------------------------
-        // 1. CPython
-        // ---------------------------------------------------------
 
-     stage("PINNED 1 - before PythonSupport.initialize")
+        // MARK: - 1. Python runtime
 
-PythonSupport.initialize()
+        stage("PINNED 1 - before PythonSupport.initialize")
 
-stage("PINNED 2 - PythonSupport.initialize OK")
+        PythonSupport.initialize()
 
-        // ---------------------------------------------------------
-        // 2. yt-dlp files
-        // ---------------------------------------------------------
-
-        stage("PINNED 5 - checking pythonModuleURL")
-
-        guard FileManager.default.fileExists(
-            atPath: Self.pythonModuleURL.path
-        ) else {
-
-            stage("PINNED ERROR - module missing")
-
-            throw YoutubeDLError.noPythonModule
-        }
-
-        stage("PINNED 6 - module exists")
+        stage("PINNED 2 - PythonSupport.initialize OK")
 
 
-        // ---------------------------------------------------------
-        // 3. Python sys
-        // ---------------------------------------------------------
+        // MARK: - 2. Test PythonKit itself
 
-stage("PINNED 7 - before C API import sys")
+        stage("PINNED 3 - before Python.builtins")
 
-guard let sysModule = PyImport_ImportModule("sys") else {
-    PyErr_Print()
-    stage("PINNED ERROR - PyImport_ImportModule sys failed")
-    throw YoutubeDLError.noPythonModule
+        let builtins = Python.builtins
+
+        stage("PINNED 4 - Python.builtins OK")
+
+
+        // MARK: - 3. Create trivial Python object
+
+        stage("PINNED 5 - before Python str")
+
+        let hello = builtins.str("hello")
+
+        stage("PINNED 6 - Python str OK")
+
+
+        // MARK: - 4. Convert Python -> Swift
+
+        stage("PINNED 7 - before Swift conversion")
+
+        let helloString = String(hello)
+
+        stage(
+            "PINNED 8 - Swift conversion OK: \(helloString)"
+        )
+
+
+        // MARK: - Stop test intentionally
+
+        stage("PINNED TEST COMPLETE")
+
+        throw PinnedTestError.testComplete
+    }
 }
 
-stage("PINNED 8 - C API import sys OK")
 
-Py_DecRef(sysModule)
+private enum PinnedTestError: LocalizedError {
 
-stage("PINNED 9 - C API sys released")
+    case testComplete
 
-throw YoutubeDLError.noPythonModule
-        
-        // ---------------------------------------------------------
-        // 4. sys.path
-        // ---------------------------------------------------------
+    var errorDescription: String? {
+        switch self {
 
-        stage("PINNED 9 - reading sys.path")
-
-        let currentPaths: [String] =
-            Array(sys.path) ?? []
-
-        stage("PINNED 10 - sys.path read OK")
-
-
-        if !currentPaths.contains(
-            Self.pythonModuleURL.path
-        ) {
-
-            stage("PINNED 11 - before fake popen")
-
-            injectFakePopen(
-                handler: popenHandler
-            )
-
-            stage("PINNED 12 - fake popen OK")
-
-
-            stage("PINNED 13 - inserting python path")
-
-            sys.path.insert(
-                1,
-                Self.pythonModuleURL.path
-            )
-
-            stage("PINNED 14 - python path inserted")
+        case .testComplete:
+            return """
+            PythonKit basistest voltooid.
+            Dit is een opzettelijke testfout.
+            """
         }
-
-
-        // ---------------------------------------------------------
-        // 5. Import yt_dlp
-        // ---------------------------------------------------------
-
-        stage("PINNED 15 - before import yt_dlp")
-
-        let module =
-            try Python.attemptImport(
-                "yt_dlp"
-            )
-
-        stage("PINNED 16 - yt_dlp import OK")
-
-
-        // ---------------------------------------------------------
-        // 6. Version
-        // ---------------------------------------------------------
-
-        stage("PINNED 17 - reading yt-dlp version")
-
-        version =
-            String(
-                module.version.__version__
-            )
-
-        stage(
-            "PINNED 18 - yt-dlp version = \(version ?? "unknown")"
-        )
-
-
-        // ---------------------------------------------------------
-        // 7. Options
-        // ---------------------------------------------------------
-
-        stage("PINNED 19 - preparing options")
-
-        let selectedOptions =
-            defaultOptions
-
-        stage("PINNED 20 - options ready")
-
-
-        // ---------------------------------------------------------
-        // 8. Python YoutubeDL object
-        // ---------------------------------------------------------
-
-        stage("PINNED 21 - before yt_dlp.YoutubeDL()")
-
-        let ydl =
-            module.YoutubeDL(
-                selectedOptions
-            )
-
-        stage("PINNED 22 - yt_dlp.YoutubeDL OK")
-
-        pythonObject = ydl
-        options = selectedOptions
-
-
-        // ---------------------------------------------------------
-        // 9. extract_info
-        // ---------------------------------------------------------
-
-        stage("PINNED 23 - before extract_info")
-
-        let rawInfo =
-            try ydl
-                .extract_info
-                .throwing
-                .dynamicallyCall(
-                    withKeywordArguments: [
-                        "":
-                            url.absoluteString,
-
-                        "download":
-                            false,
-
-                        "process":
-                            true
-                    ]
-                )
-
-        stage("PINNED 24 - extract_info OK")
-
-
-        // ---------------------------------------------------------
-        // 10. Format selector
-        // ---------------------------------------------------------
-
-        stage("PINNED 25 - building format selector")
-
-        let selector =
-            ydl.build_format_selector(
-                selectedOptions["format"]
-            )
-
-        stage("PINNED 26 - selector built")
-
-
-        stage("PINNED 27 - selecting formats")
-
-        let selectedFormats =
-            selector(rawInfo)
-
-        stage("PINNED 28 - formats selected")
-
-
-        // ---------------------------------------------------------
-        // 11. Decode
-        // ---------------------------------------------------------
-
-        let decoder =
-            PythonDecoder()
-
-        var formats: [Format] = []
-
-        stage("PINNED 29 - decoding formats")
-
-
-        for rawFormat in selectedFormats {
-
-            let format =
-                try decoder.decode(
-                    Format.self,
-                    from: rawFormat
-                )
-
-            formats.append(format)
-        }
-
-        stage(
-            "PINNED 30 - decoded \(formats.count) formats"
-        )
-
-
-        stage("PINNED 31 - decoding info")
-
-        let info =
-            try decoder.decode(
-                Info.self,
-                from: rawInfo
-            )
-
-        stage("PINNED 32 - COMPLETE")
-
-
-        return (
-            formats,
-            info
-        )
     }
 }
