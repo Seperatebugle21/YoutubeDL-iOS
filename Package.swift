@@ -23,11 +23,6 @@ let package = Package(
     dependencies: [
 
         .package(
-            url: "https://github.com/kewlbear/FFmpeg-iOS-Lame",
-            .exact("0.0.6-b20230730-000000")
-        ),
-
-        .package(
             url: "https://github.com/pvieito/PythonKit.git",
             .exact("0.5.1")
         ),
@@ -45,8 +40,11 @@ let package = Package(
 
             dependencies: [
                 "Python-iOS",
-                "PythonKit",
-                "FFmpeg-iOS-Lame"
+                "PythonKit"
+            ],
+
+            exclude: [
+                "Transcoder.swift"
             ],
 
             swiftSettings: [
