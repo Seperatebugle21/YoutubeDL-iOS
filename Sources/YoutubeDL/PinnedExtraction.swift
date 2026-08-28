@@ -1,6 +1,8 @@
 import Foundation
 import PythonKit
 import PythonSupport
+import LinkPython
+
 
 public extension YoutubeDL {
 
@@ -48,13 +50,22 @@ stage("PINNED 2 - PythonSupport.initialize OK")
         // 3. Python sys
         // ---------------------------------------------------------
 
-    stage("PINNED 7 - before Python.import sys")
+stage("PINNED 7 - before C API import sys")
 
-let sys =
-    Python.import("sys")
+guard let sysModule = PyImport_ImportModule("sys") else {
+    PyErr_Print()
+    stage("PINNED ERROR - PyImport_ImportModule sys failed")
+    throw YoutubeDLError.noPythonModule
+}
 
-stage("PINNED 8 - Python.import sys OK")
+stage("PINNED 8 - C API import sys OK")
 
+Py_DecRef(sysModule)
+
+stage("PINNED 9 - C API sys released")
+
+throw YoutubeDLError.noPythonModule
+        
         // ---------------------------------------------------------
         // 4. sys.path
         // ---------------------------------------------------------
