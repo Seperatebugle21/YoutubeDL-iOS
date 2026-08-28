@@ -3,7 +3,6 @@
 import PackageDescription
 
 let package = Package(
-
     name: "YoutubeDL-iOS",
 
     platforms: [
@@ -11,7 +10,6 @@ let package = Package(
     ],
 
     products: [
-
         .library(
             name: "YoutubeDL",
             targets: [
@@ -21,7 +19,6 @@ let package = Package(
     ],
 
     dependencies: [
-
         .package(
             url: "https://github.com/pvieito/PythonKit.git",
             .exact("0.5.1")
@@ -34,7 +31,6 @@ let package = Package(
     ],
 
     targets: [
-
         .target(
             name: "YoutubeDL",
 
@@ -48,17 +44,14 @@ let package = Package(
             ],
 
             swiftSettings: [
-                .unsafeFlags(
-                    [
-                        "-Onone"
-                    ]
-                )
+                .unsafeFlags([
+                    "-Onone"
+                ])
             ]
         ),
 
         .testTarget(
             name: "YoutubeDL_iOSTests",
-
             dependencies: [
                 "YoutubeDL"
             ]
