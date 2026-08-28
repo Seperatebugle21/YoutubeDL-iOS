@@ -3,6 +3,7 @@
 import PackageDescription
 
 let package = Package(
+
     name: "YoutubeDL-iOS",
 
     platforms: [
@@ -10,6 +11,7 @@ let package = Package(
     ],
 
     products: [
+
         .library(
             name: "YoutubeDL",
             targets: [
@@ -19,23 +21,25 @@ let package = Package(
     ],
 
     dependencies: [
+
         .package(
             url: "https://github.com/kewlbear/FFmpeg-iOS-Lame",
-            exact: "0.0.6-b20230730-000000"
+            .exact("0.0.6-b20230730-000000")
         ),
 
         .package(
             url: "https://github.com/pvieito/PythonKit.git",
-            exact: "0.5.1"
+            .exact("0.5.1")
         ),
 
         .package(
             url: "https://github.com/kewlbear/Python-iOS.git",
-            exact: "0.1.1-b20230423-090254"
+            .exact("0.1.1-b20230423-090254")
         )
     ],
 
     targets: [
+
         .target(
             name: "YoutubeDL",
 
