@@ -6,12 +6,15 @@ on:
       - python-3.13
     paths:
       - ".github/workflows/package-python-3.13.yml"
-      - "Package.swift"
       - "Sources/PythonSupport/**"
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: python-313-xcframework-package
+  cancel-in-progress: false
 
 jobs:
   package:
@@ -40,14 +43,19 @@ jobs:
           FRAMEWORK="$(find extracted -type d -name Python.xcframework -print -quit)"
           if [ -z "$FRAMEWORK" ]; then
             echo "Python.xcframework not found in BeeWare archive."
-            find extracted -maxdepth 4 -print
+            find extracted -maxdepth 5 -print
             exit 1
           fi
+
           mkdir package
           ditto "$FRAMEWORK" "package/Python.xcframework"
+
+          COUNT=0
           while IFS= read -r PYTHON_FRAMEWORK; do
+            COUNT=$((COUNT + 1))
             if [ ! -f "$PYTHON_FRAMEWORK/Headers/Python.h" ]; then
               echo "Missing Python.h in $PYTHON_FRAMEWORK"
+              find "$PYTHON_FRAMEWORK" -maxdepth 3 -print
               exit 1
             fi
             mkdir -p "$PYTHON_FRAMEWORK/Modules"
@@ -59,12 +67,24 @@ jobs:
           }
           MODULEMAP
           done < <(find package/Python.xcframework -type d -name Python.framework -print)
-          test -f package/Python.xcframework/Info.plist
-          test -n "$(find package/Python.xcframework -path '*/Modules/module.modulemap' -print -quit)"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No Python.framework slices found in XCFramework."
+            exit 1
+          fi
+
+          plutil -lint package/Python.xcframework/Info.plist
+          MODULEMAP_COUNT="$(find package/Python.xcframework -path '*/Modules/module.modulemap' -type f | wc -l | tr -d ' ')"
+          if [ "$MODULEMAP_COUNT" -ne "$COUNT" ]; then
+            echo "Expected $COUNT module maps, found $MODULEMAP_COUNT."
+            exit 1
+          fi
+
           cd package
           ditto -c -k --sequesterRsrc --keepParent Python.xcframework Python.xcframework.zip
           CHECKSUM="$(swift package compute-checksum Python.xcframework.zip)"
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "framework_slices=$COUNT" >> "$GITHUB_OUTPUT"
 
       - name: Pin binary artifact checksum in Package.swift
         env:
@@ -85,21 +105,22 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Package.swift
-          git commit -m "Publish Python 3.13 XCFramework with Swift module maps"
+          git commit -m "Pin Python 3.13 modulemap v2 XCFramework checksum"
           git push origin HEAD:python-3.13
 
       - name: Publish binary artifact
         env:
           GH_TOKEN: ${{ github.token }}
           CHECKSUM: ${{ steps.archive.outputs.checksum }}
+          FRAMEWORK_SLICES: ${{ steps.archive.outputs.framework_slices }}
         run: |
           set -euo pipefail
-          TAG="python-ios-3.13.18-b18-modulemap"
+          TAG="python-ios-3.13.18-b18-modulemap-v2"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; refusing to replace a published binary."
             exit 1
           fi
           gh release create "$TAG" package/Python.xcframework.zip \
             --target "$(git rev-parse HEAD)" \
-            --title "Python iOS 3.13.18 (BeeWare b18, Swift module maps)" \
-            --notes "BeeWare Python 3.13 iOS XCFramework with explicit Swift module maps. SwiftPM checksum: $CHECKSUM"
+            --title "Python iOS 3.13.18 (BeeWare b18, Swift module maps v2)" \
+            --notes "BeeWare Python 3.13 iOS XCFramework with explicit Swift module maps. Framework slices: $FRAMEWORK_SLICES. SwiftPM checksum: $CHECKSUM"
