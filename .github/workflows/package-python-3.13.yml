@@ -1,0 +1,89 @@
+name: Package Python 3.13 XCFramework
+
+on:
+  push:
+    branches:
+      - python-3.13
+    paths:
+      - ".github/workflows/package-python-3.13.yml"
+      - "Package.swift"
+      - "Sources/PythonSupport/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: python-3.13
+          fetch-depth: 0
+
+      - name: Download verified BeeWare Python 3.13 support bundle
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            "https://github.com/beeware/Python-Apple-support/releases/download/3.13-b18/Python-3.13-iOS-support.b18.tar.gz" \
+            --output python-support.tar.gz
+          echo "d06acf2a9c7964a8689566353a0e707402eff822037de5e29ba0e16040f7047d  python-support.tar.gz" | shasum -a 256 --check
+
+      - name: Build SwiftPM-compatible XCFramework archive
+        id: archive
+        run: |
+          set -euo pipefail
+          mkdir extracted
+          tar -xzf python-support.tar.gz -C extracted
+          FRAMEWORK="$(find extracted -type d -name Python.xcframework -print -quit)"
+          if [ -z "$FRAMEWORK" ]; then
+            echo "Python.xcframework not found in BeeWare archive."
+            find extracted -maxdepth 4 -print
+            exit 1
+          fi
+          mkdir package
+          ditto "$FRAMEWORK" "package/Python.xcframework"
+          cd package
+          ditto -c -k --sequesterRsrc --keepParent Python.xcframework Python.xcframework.zip
+          CHECKSUM="$(swift package compute-checksum Python.xcframework.zip)"
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+
+      - name: Pin binary artifact checksum in Package.swift
+        env:
+          CHECKSUM: ${{ steps.archive.outputs.checksum }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path("Package.swift")
+          source = path.read_text()
+          marker = "__PYTHON_XCFRAMEWORK_CHECKSUM__"
+          checksum = os.environ["CHECKSUM"]
+          if marker not in source:
+              raise SystemExit("Checksum placeholder is missing; refusing to publish.")
+          path.write_text(source.replace(marker, checksum))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Package.swift
+          git commit -m "Pin Python 3.13 XCFramework checksum"
+          git push origin HEAD:python-3.13
+
+      - name: Publish binary artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKSUM: ${{ steps.archive.outputs.checksum }}
+        run: |
+          set -euo pipefail
+          TAG="python-ios-3.13.18-b18"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to replace a published binary."
+            exit 1
+          fi
+          gh release create "$TAG" package/Python.xcframework.zip \
+            --target "$(git rev-parse HEAD)" \
+            --title "Python iOS 3.13.18 (BeeWare b18)" \
+            --notes "Verified BeeWare Python 3.13 iOS XCFramework. SwiftPM checksum: $CHECKSUM"
