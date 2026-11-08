@@ -24,10 +24,7 @@ let package = Package(
             .exact("0.5.1")
         ),
 
-        .package(
-            url: "https://github.com/kewlbear/Python-iOS.git",
-            .exact("0.1.1-b20230423-090254")
-        )
+
     ],
 
     targets: [
@@ -35,7 +32,7 @@ let package = Package(
             name: "YoutubeDL",
 
             dependencies: [
-                "Python-iOS",
+                "PythonSupport",
                 "PythonKit"
             ],
 
@@ -48,6 +45,17 @@ let package = Package(
                     "-Onone"
                 ])
             ]
+        ),
+
+        .target(
+            name: "PythonSupport",
+            dependencies: ["Python"]
+        ),
+
+        .binaryTarget(
+            name: "Python",
+            url: "https://github.com/Seperatebugle21/YoutubeDL-iOS/releases/download/python-ios-3.13.18-b18/Python.xcframework.zip",
+            checksum: "__PYTHON_XCFRAMEWORK_CHECKSUM__"
         ),
 
         .testTarget(
