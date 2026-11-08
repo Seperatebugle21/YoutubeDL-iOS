@@ -31,7 +31,7 @@ jobs:
             --output python-support.tar.gz
           echo "d06acf2a9c7964a8689566353a0e707402eff822037de5e29ba0e16040f7047d  python-support.tar.gz" | shasum -a 256 --check
 
-      - name: Build SwiftPM-compatible XCFramework archive
+      - name: Add Swift module maps and package XCFramework
         id: archive
         run: |
           set -euo pipefail
@@ -45,6 +45,22 @@ jobs:
           fi
           mkdir package
           ditto "$FRAMEWORK" "package/Python.xcframework"
+          while IFS= read -r PYTHON_FRAMEWORK; do
+            if [ ! -f "$PYTHON_FRAMEWORK/Headers/Python.h" ]; then
+              echo "Missing Python.h in $PYTHON_FRAMEWORK"
+              exit 1
+            fi
+            mkdir -p "$PYTHON_FRAMEWORK/Modules"
+            cat > "$PYTHON_FRAMEWORK/Modules/module.modulemap" <<'MODULEMAP'
+          framework module Python {
+            umbrella header "Python.h"
+            export *
+            module * { export * }
+          }
+          MODULEMAP
+          done < <(find package/Python.xcframework -type d -name Python.framework -print)
+          test -f package/Python.xcframework/Info.plist
+          test -n "$(find package/Python.xcframework -path '*/Modules/module.modulemap' -print -quit)"
           cd package
           ditto -c -k --sequesterRsrc --keepParent Python.xcframework Python.xcframework.zip
           CHECKSUM="$(swift package compute-checksum Python.xcframework.zip)"
@@ -69,7 +85,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Package.swift
-          git commit -m "Pin Python 3.13 XCFramework checksum"
+          git commit -m "Publish Python 3.13 XCFramework with Swift module maps"
           git push origin HEAD:python-3.13
 
       - name: Publish binary artifact
@@ -78,12 +94,12 @@ jobs:
           CHECKSUM: ${{ steps.archive.outputs.checksum }}
         run: |
           set -euo pipefail
-          TAG="python-ios-3.13.18-b18"
+          TAG="python-ios-3.13.18-b18-modulemap"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; refusing to replace a published binary."
             exit 1
           fi
           gh release create "$TAG" package/Python.xcframework.zip \
             --target "$(git rev-parse HEAD)" \
-            --title "Python iOS 3.13.18 (BeeWare b18)" \
-            --notes "Verified BeeWare Python 3.13 iOS XCFramework. SwiftPM checksum: $CHECKSUM"
+            --title "Python iOS 3.13.18 (BeeWare b18, Swift module maps)" \
+            --notes "BeeWare Python 3.13 iOS XCFramework with explicit Swift module maps. SwiftPM checksum: $CHECKSUM"
