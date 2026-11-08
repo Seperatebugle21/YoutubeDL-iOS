@@ -22,7 +22,7 @@ let package = Package(
         .binaryTarget(
             name: "Python",
             url: "https://github.com/Seperatebugle21/YoutubeDL-iOS/releases/download/python-ios-3.13.18-b18-modulemap/Python.xcframework.zip",
-            checksum: "__PYTHON_XCFRAMEWORK_CHECKSUM__"
+            checksum: "6a2988646a0ecbebec22bb474f8638a6c328e7ab1a31bf11ed5343bf0b72722d"
         ),
         .testTarget(name: "YoutubeDL_iOSTests", dependencies: ["YoutubeDL"])
     ]
