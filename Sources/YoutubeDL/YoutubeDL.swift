@@ -284,10 +284,21 @@ open class YoutubeDL: NSObject {
     }
 
 
+    /// The yt-dlp release that gets downloaded.
+    ///
+    /// yt-dlp 2026.10.26 raised its minimum Python version to 3.11, but
+    /// the bundled Python-iOS runtime is Python 3.10. Stay on the last
+    /// release that still supports 3.10 until the runtime is upgraded,
+    /// then change this back to the latest release.
+    public static let pinnedVersion =
+        "2026.10.21"
+
+
+    /// Download URL for `pinnedVersion` (name kept for compatibility).
     public static let latestDownloadURL =
         URL(
             string:
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+                "https://github.com/yt-dlp/yt-dlp/releases/download/\(pinnedVersion)/yt-dlp"
         )!
 
 
