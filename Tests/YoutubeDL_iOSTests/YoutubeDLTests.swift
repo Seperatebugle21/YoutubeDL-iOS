@@ -23,13 +23,13 @@
 import XCTest
 @testable import YoutubeDL
 import PythonKit
-import PythonSupport
     
 final class YoutubeDL_iOSTests: XCTestCase {
-    func testPy_IsInitialized() {
-        XCTAssertEqual(Py_IsInitialized(), 0)
-        PythonSupport.initialize()
-        XCTAssertEqual(Py_IsInitialized(), 1)
+    func testPythonRuntime() async throws {
+        let version = try await PythonRuntime.run {
+            String(Python.import("sys").version)!
+        }
+        XCTAssertTrue(version.hasPrefix(PythonRuntime.pythonVersion), version)
     }
     
     func testExtractInfo() async throws {

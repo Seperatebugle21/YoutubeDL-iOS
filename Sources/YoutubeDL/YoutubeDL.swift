@@ -22,7 +22,6 @@
 
 import Foundation
 import PythonKit
-import PythonSupport
 import AVFoundation
 import Photos
 import UIKit
@@ -39,8 +38,6 @@ func loadSymbol<T>(_ name: String) -> T {
     )
 }
 
-let Py_IsInitialized: @convention(c) () -> Int32 =
-    loadSymbol("Py_IsInitialized")
 
 
 public struct Info: Codable {
@@ -284,21 +281,10 @@ open class YoutubeDL: NSObject {
     }
 
 
-    /// The yt-dlp release that gets downloaded.
-    ///
-    /// yt-dlp 2026.10.26 raised its minimum Python version to 3.11, but
-    /// the bundled Python-iOS runtime is Python 3.10. Stay on the last
-    /// release that still supports 3.10 until the runtime is upgraded,
-    /// then change this back to the latest release.
-    public static let pinnedVersion =
-        "2026.10.21"
-
-
-    /// Download URL for `pinnedVersion` (name kept for compatibility).
     public static let latestDownloadURL =
         URL(
             string:
-                "https://github.com/yt-dlp/yt-dlp/releases/download/\(pinnedVersion)/yt-dlp"
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
         )!
 
 
@@ -542,89 +528,127 @@ open class YoutubeDL: NSObject {
     }
 
 
+    /// Downloads the yt-dlp module when it is not installed yet.
+    /// Does not touch Python.
+    public static func ensurePythonModule(
+        download:
+            Bool = true
+    ) async throws {
+
+        if FileManager.default
+            .fileExists(
+                atPath:
+                    pythonModuleURL
+                        .path
+            ) {
+
+            return
+        }
+
+
+        guard download else {
+
+            throw YoutubeDLError
+                .noPythonModule
+        }
+
+
+        try await
+            downloadPythonModule()
+    }
+
+
     func loadPythonModule(
         downloadPythonModule:
             Bool = true
     ) async throws -> PythonObject {
 
-        if Py_IsInitialized() == 0 {
+        try await
+            Self
+                .ensurePythonModule(
+                    download:
+                        downloadPythonModule
+                )
 
-            PythonSupport
-                .initialize()
-        }
+
+        return try loadPythonModuleSync()
+    }
 
 
-        if !FileManager.default
+    /// Starts Python and imports yt_dlp. The module must already be
+    /// downloaded (`ensurePythonModule`). Runs on the Python thread; use the
+    /// result only inside `PythonRuntime.run`/`sync`.
+    public func loadPythonModuleSync()
+        throws -> PythonObject
+    {
+
+        guard FileManager.default
             .fileExists(
                 atPath:
                     Self
                         .pythonModuleURL
                         .path
-            ) {
+            )
+        else {
 
-            guard
-                downloadPythonModule
-            else {
-
-                throw YoutubeDLError
-                    .noPythonModule
-            }
-
-
-            try await
-                Self
-                    .downloadPythonModule()
+            throw YoutubeDLError
+                .noPythonModule
         }
 
 
-        let sys =
-            try Python
-                .attemptImport(
-                    "sys"
-                )
+        return try PythonRuntime.sync {
+
+            () throws -> PythonObject in
+
+            let sys =
+                try Python
+                    .attemptImport(
+                        "sys"
+                    )
 
 
-        if !(Array(
-            sys.path
-        ) ?? [])
-            .contains(
-                Self
-                    .pythonModuleURL
-                    .path
-            ) {
-
-            injectFakePopen(
-                handler:
-                    popenHandler
-            )
-
-
-            sys.path
-                .insert(
-                    1,
+            if !(Array(
+                sys.path
+            ) ?? [])
+                .contains(
                     Self
                         .pythonModuleURL
                         .path
+                ) {
+
+                injectFakePopen(
+                    handler:
+                        popenHandler
                 )
+
+
+                sys.path
+                    .insert(
+                        1,
+                        Self
+                            .pythonModuleURL
+                            .path
+                    )
+            }
+
+
+            let pythonModule =
+                try Python
+                    .attemptImport(
+                        "yt_dlp"
+                    )
+
+
+            version =
+                String(
+                    pythonModule
+                        .version
+                        .__version__
+                )
+
+
+            return pythonModule
         }
-
-
-        let pythonModule =
-            try Python
-                .attemptImport(
-                    "yt_dlp"
-                )
-
-
-        version =
-            String(
-                pythonModule
-                    .version
-                    .__version__
-            )
-
-
-        return pythonModule
     }
 
 
@@ -633,7 +657,7 @@ open class YoutubeDL: NSObject {
             PythonFunction
     ) {
 
-        runSimpleString(
+        PythonRuntime.runSimpleString(
             """
             import errno
             import os
@@ -2638,6 +2662,44 @@ public class YtDlp {
             try await
                 context
                     .loadPythonModule()
+
+
+        self.context =
+            context
+    }
+
+
+    /// Synchronous variant of `init()` for use inside
+    /// `PythonRuntime.run { }`. The yt-dlp module must already be
+    /// downloaded (`YoutubeDL.ensurePythonModule()`).
+    public static func prepared()
+        throws -> YtDlp
+    {
+
+        let context =
+            Context()
+
+
+        return YtDlp(
+            module:
+                try context
+                    .loadPythonModuleSync(),
+            context:
+                context
+        )
+    }
+
+
+    init(
+        module:
+            PythonObject,
+
+        context:
+            Context
+    ) {
+
+        yt_dlp =
+            module
 
 
         self.context =
